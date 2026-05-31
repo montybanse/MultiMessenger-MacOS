@@ -26,6 +26,19 @@ struct Workspace: Identifiable, Codable, Hashable {
     /// Optionale Akzentfarbe des Workspace (Schlüssel aus AccentPalette).
     /// nil = System-Akzentfarbe.
     var accentKey: String? = nil
+
+    init(id: UUID = UUID(), name: String, symbol: String = "square.grid.2x2", accentKey: String? = nil) {
+        self.id = id; self.name = name; self.symbol = symbol; self.accentKey = accentKey
+    }
+
+    // Robustes Decoding (fehlende Felder -> Default), damit ältere store.json lädt.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id        = try c.decodeIfPresent(UUID.self,   forKey: .id) ?? UUID()
+        name      = try c.decodeIfPresent(String.self, forKey: .name) ?? ""
+        symbol    = try c.decodeIfPresent(String.self, forKey: .symbol) ?? "square.grid.2x2"
+        accentKey = try c.decodeIfPresent(String.self, forKey: .accentKey)
+    }
 }
 
 // MARK: - Akzentfarben (pro Workspace wählbar)
@@ -128,6 +141,48 @@ struct Service: Identifiable, Codable, Hashable {
         if words.isEmpty { return true }
         let haystack = (title + " " + body).lowercased()
         return words.contains { haystack.contains($0) }
+    }
+
+    // Robustes Decoding: fehlende (neue) Felder fallen auf Default zurück,
+    // damit ältere store.json-Dateien weiterhin geladen werden können.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id            = try c.decodeIfPresent(UUID.self,         forKey: .id) ?? UUID()
+        name          = try c.decodeIfPresent(String.self,       forKey: .name) ?? ""
+        urlString     = try c.decodeIfPresent(String.self,       forKey: .urlString) ?? ""
+        workspaceID   = try c.decodeIfPresent(UUID.self,         forKey: .workspaceID)
+        sleepPolicy   = try c.decodeIfPresent(SleepPolicy.self,  forKey: .sleepPolicy) ?? .sleepWhenInactive
+        muted         = try c.decodeIfPresent(Bool.self,         forKey: .muted) ?? false
+        zoom          = try c.decodeIfPresent(Double.self,       forKey: .zoom) ?? 1.0
+        customCSS     = try c.decodeIfPresent(String.self,       forKey: .customCSS) ?? ""
+        customJS      = try c.decodeIfPresent(String.self,       forKey: .customJS) ?? ""
+        iconSymbol    = try c.decodeIfPresent(String.self,       forKey: .iconSymbol) ?? "globe"
+        iconData      = try c.decodeIfPresent(Data.self,         forKey: .iconData)
+        useFavicon    = try c.decodeIfPresent(Bool.self,         forKey: .useFavicon) ?? true
+        faviconData   = try c.decodeIfPresent(Data.self,         forKey: .faviconData)
+        dataStoreID   = try c.decodeIfPresent(UUID.self,         forKey: .dataStoreID) ?? UUID()
+        templateID    = try c.decodeIfPresent(String.self,       forKey: .templateID)
+        userAgent     = try c.decodeIfPresent(String.self,       forKey: .userAgent) ?? ""
+        notificationStyle = try c.decodeIfPresent(NotificationStyle.self, forKey: .notificationStyle) ?? .bannerAndSound
+        notificationKeywords = try c.decodeIfPresent(String.self, forKey: .notificationKeywords) ?? ""
+        locked        = try c.decodeIfPresent(Bool.self,         forKey: .locked) ?? false
+    }
+
+    // Memberwise-Init bleibt erhalten (manuell, da init(from:) ihn sonst verdrängt).
+    init(id: UUID = UUID(), name: String, urlString: String, workspaceID: UUID? = nil,
+         sleepPolicy: SleepPolicy = .sleepWhenInactive, muted: Bool = false, zoom: Double = 1.0,
+         customCSS: String = "", customJS: String = "", iconSymbol: String = "globe",
+         iconData: Data? = nil, useFavicon: Bool = true, faviconData: Data? = nil,
+         dataStoreID: UUID = UUID(), templateID: String? = nil, userAgent: String = "",
+         notificationStyle: NotificationStyle = .bannerAndSound, notificationKeywords: String = "",
+         locked: Bool = false) {
+        self.id = id; self.name = name; self.urlString = urlString; self.workspaceID = workspaceID
+        self.sleepPolicy = sleepPolicy; self.muted = muted; self.zoom = zoom
+        self.customCSS = customCSS; self.customJS = customJS; self.iconSymbol = iconSymbol
+        self.iconData = iconData; self.useFavicon = useFavicon; self.faviconData = faviconData
+        self.dataStoreID = dataStoreID; self.templateID = templateID; self.userAgent = userAgent
+        self.notificationStyle = notificationStyle; self.notificationKeywords = notificationKeywords
+        self.locked = locked
     }
 }
 

@@ -154,19 +154,39 @@ final class AppState: ObservableObject {
         storeDirectory.appendingPathComponent("store.json")
     }
 
+    /// true, sobald erfolgreich (oder bei Erststart) geladen wurde. Schützt davor,
+    /// dass ein fehlgeschlagenes Laden anschließend leere Daten überschreibt.
+    private var didLoadSuccessfully = false
+
     func load() {
         let url = Self.storeURL
         // Schutz: Falls versehentlich ein Ordner an dieser Stelle liegt -> entfernen.
         var isDir: ObjCBool = false
         if FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir), isDir.boolValue {
             try? FileManager.default.removeItem(at: url)
+            didLoadSuccessfully = true   // war nie eine gültige Datei -> Speichern erlaubt
             return
         }
-        guard let data = try? Data(contentsOf: url),
-              let decoded = try? JSONDecoder().decode(PersistedState.self, from: data) else {
+
+        guard let data = try? Data(contentsOf: url), !data.isEmpty else {
+            // Keine/leere Datei (Erststart) -> Speichern erlaubt.
+            didLoadSuccessfully = true
             return
         }
-        apply(decoded)
+
+        do {
+            let decoded = try JSONDecoder().decode(PersistedState.self, from: data)
+            apply(decoded)
+            didLoadSuccessfully = true
+        } catch {
+            // Datei vorhanden, aber nicht lesbar: NICHT überschreiben! Kopie sichern
+            // und Speichern sperren, bis das Problem behoben ist.
+            let backup = url.deletingPathExtension()
+                .appendingPathExtension("corrupt-\(Int(Date().timeIntervalSince1970)).json")
+            try? FileManager.default.copyItem(at: url, to: backup)
+            NSLog("AppState.load: store.json nicht lesbar (\(error)). Sicherung: \(backup.lastPathComponent). Speichern gesperrt.")
+            didLoadSuccessfully = false
+        }
     }
 
     private func apply(_ decoded: PersistedState) {
@@ -188,15 +208,38 @@ final class AppState: ObservableObject {
     }
 
     func save() {
+        // Sicherheitssperre: nach fehlgeschlagenem Laden NICHT speichern.
+        guard didLoadSuccessfully else {
+            NSLog("AppState.save: übersprungen (Laden war fehlgeschlagen, Daten geschützt).")
+            return
+        }
+
         let url = Self.storeURL
         // Schutz: liegt hier (fälschlich) ein Ordner, erst entfernen.
         var isDir: ObjCBool = false
         if FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir), isDir.boolValue {
             try? FileManager.default.removeItem(at: url)
         }
+
+        // Zusatzschutz: keine leere Dienstliste über eine vorhandene, nicht-leere
+        // Datei schreiben (verhindert versehentliches „alles weg").
+        if services.isEmpty, let existing = try? Data(contentsOf: url),
+           let prev = try? JSONDecoder().decode(PersistedState.self, from: existing),
+           !prev.services.isEmpty {
+            NSLog("AppState.save: übersprungen (leere Liste würde \(prev.services.count) Dienste überschreiben).")
+            return
+        }
+
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted]
         guard let data = try? encoder.encode(snapshot) else { return }
+
+        // Vor dem Überschreiben rollierende Sicherung anlegen.
+        if let existing = try? Data(contentsOf: url), !existing.isEmpty {
+            let bak = url.deletingPathExtension().appendingPathExtension("bak.json")
+            try? existing.write(to: bak, options: .atomic)
+        }
+
         do {
             try data.write(to: url, options: .atomic)
         } catch {

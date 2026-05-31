@@ -25,6 +25,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem.onShow = { [weak self] in self?.showMainWindow() }
         statusItem.onToggleDND = { [weak self] in self?.app.settings.dndEnabled.toggle() }
         statusItem.onQuit = { NSApp.terminate(nil) }
+        statusItem.popoverContent = { [weak self] in
+            guard let self else { return AnyView(EmptyView()) }
+            return AnyView(
+                MenuBarPanel(
+                    onOpenService: { [weak self] id in
+                        self?.app.select(id)
+                        self?.statusItem.closePopover()
+                        self?.showMainWindow()
+                    },
+                    onOpenMain: { [weak self] in
+                        self?.statusItem.closePopover()
+                        self?.showMainWindow()
+                    }
+                )
+                .environmentObject(self.app)
+                .environmentObject(self.icons)
+                .environmentObject(self.manager)
+            )
+        }
 
         // Globaler Hotkey
         HotKeyManager.shared.onTrigger = { [weak self] in self?.showMainWindow() }

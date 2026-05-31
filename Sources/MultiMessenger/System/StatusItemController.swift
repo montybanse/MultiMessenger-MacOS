@@ -1,12 +1,19 @@
 import AppKit
+import SwiftUI
 
 /// Symbol in der macOS-Menüleiste mit Gesamtzahl ungelesener Nachrichten.
+/// Links-Klick öffnet ein Popover mit der Dienst-Übersicht, Rechts-Klick ein Menü.
 @MainActor
 final class StatusItemController {
     private var statusItem: NSStatusItem?
+    private let popover = NSPopover()
+
     var onShow: (() -> Void)?
     var onToggleDND: (() -> Void)?
     var onQuit: (() -> Void)?
+    /// Liefert den Inhalt des Popovers (SwiftUI), z.B. die Dienst-Übersicht.
+    var popoverContent: (() -> AnyView)?
+
     private(set) var dndEnabled = false
 
     func install() {
@@ -15,8 +22,11 @@ final class StatusItemController {
             button.image = NSImage(systemSymbolName: "bubble.left.and.bubble.right.fill",
                                    accessibilityDescription: "MultiMessenger")
             button.imagePosition = .imageLeading
+            button.target = self
+            button.action = #selector(buttonClicked)
+            button.sendAction(on: [.leftMouseUp, .rightMouseUp])
         }
-        item.menu = buildMenu()
+        popover.behavior = .transient
         statusItem = item
     }
 
@@ -26,7 +36,40 @@ final class StatusItemController {
         button.title = totalUnread > 0 ? " \(totalUnread)" : ""
         let symbol = dndEnabled ? "moon.fill" : "bubble.left.and.bubble.right.fill"
         button.image = NSImage(systemSymbolName: symbol, accessibilityDescription: "MultiMessenger")
-        statusItem?.menu = buildMenu()
+    }
+
+    // MARK: Klick-Verteilung
+
+    @objc private func buttonClicked() {
+        let event = NSApp.currentEvent
+        if event?.type == .rightMouseUp {
+            showMenu()
+        } else {
+            togglePopover()
+        }
+    }
+
+    func closePopover() { popover.performClose(nil) }
+
+    private func togglePopover() {
+        guard let button = statusItem?.button else { return }
+        if popover.isShown {
+            popover.performClose(nil)
+            return
+        }
+        if let content = popoverContent?() {
+            popover.contentViewController = NSHostingController(rootView: content)
+            popover.contentSize = NSSize(width: 320, height: 420)
+        }
+        popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+        popover.contentViewController?.view.window?.makeKey()
+    }
+
+    private func showMenu() {
+        let menu = buildMenu()
+        statusItem?.menu = menu
+        statusItem?.button?.performClick(nil)
+        statusItem?.menu = nil   // nur für diesen Klick, sonst blockiert es das Popover
     }
 
     private func buildMenu() -> NSMenu {

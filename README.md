@@ -9,9 +9,6 @@ Gebaut mit **Swift + SwiftUI + WKWebView** (die System-WebKit-Engine, dieselbe
 wie Safari). Dadurch deutlich **ressourcenschonender** als Electron-basierte
 Alternativen wie Franz oder Rambox, und es fügt sich nativ in macOS ein.
 
-> Gedacht als schlanker Ersatz für das nicht mehr weiterentwickelte, inzwischen
-> kostenpflichtige *Singlebox*.
-
 ---
 
 ## ⚠️ Bitte zuerst lesen
@@ -103,6 +100,15 @@ Schlüsselbund-Passwort):
   „Jetzt schlafen legen“ und Pause-Symbol auf schlafenden Diensten
 - **Native Benachrichtigungen** + Ungelesen-Badge pro Dienst +
   Menüleisten-Symbol mit Gesamtzahl + „Nicht stören“ + Stummschalten pro Dienst
+- **Benachrichtigungsregeln pro Dienst:** Banner+Ton / nur Banner / nur Ton / aus,
+  optional mit **Stichwort-Filter** (nur melden, wenn z. B. „@name“ vorkommt)
+- **Menüleisten-Popover:** Links-Klick aufs Menüleisten-Symbol zeigt alle Dienste
+  mit Ungelesen-Zählern + DND-Schalter, Klick springt zum Dienst (Rechts-Klick = Menü)
+- **Einzelne Dienste mit Touch ID schützen** (z. B. privater Account) – zusätzlich
+  zur App-Sperre
+- **Akzentfarbe pro Workspace** – die Oberfläche färbt sich passend zum aktiven
+  Workspace (Arbeit/Privat sofort erkennbar)
+- **„Immer wach“-Dienste werden beim Start vorgeladen** (Benachrichtigungen ab Start)
 - **Kontaktbild** in Benachrichtigungen (sofern der Dienst es mitliefert)
 - **Browser-Kennung pro Dienst** (Safari/Chrome/eigene) – nötig für Slack, MS
   Teams und den virtuellen Hintergrund in BigBlueButton

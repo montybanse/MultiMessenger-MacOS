@@ -33,6 +33,9 @@ final class AppState: ObservableObject {
     /// einem Dienst zuordnen soll. Nicht-nil = Auswahldialog anzeigen.
     @Published var pendingShareURL: String?
 
+    /// Pro Sitzung freigeschaltete (entsperrte) Dienste – nicht persistiert.
+    @Published var unlockedServiceIDs: Set<UUID> = []
+
     private var saveCancellable: AnyCancellable?
 
     // MARK: Abgeleitete Daten
@@ -227,5 +230,23 @@ final class AppState: ObservableObject {
         case .light:  return .light
         case .dark:   return .dark
         }
+    }
+
+    /// Muss der Dienst noch per Touch ID entsperrt werden, bevor er sichtbar wird?
+    func needsUnlock(_ service: Service) -> Bool {
+        service.locked && !unlockedServiceIDs.contains(service.id)
+    }
+
+    func markUnlocked(_ id: UUID) {
+        unlockedServiceIDs.insert(id)
+    }
+
+    /// Akzentfarbe des aktiven Workspace (nil = System-Akzent).
+    /// Bei "Alle Dienste" wird der Workspace des ausgewählten Dienstes genutzt.
+    var currentAccent: Color? {
+        let wsID = selectedWorkspaceID ?? selectedService?.workspaceID
+        guard let wsID,
+              let ws = workspaces.first(where: { $0.id == wsID }) else { return nil }
+        return AccentPalette.color(for: ws.accentKey)
     }
 }

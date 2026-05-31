@@ -197,7 +197,7 @@ private struct TabItem: View {
 
     var body: some View {
         ServiceIconView(service: service, size: 34, unread: unread,
-                        muted: service.muted, sleeping: sleeping)
+                        muted: service.muted, sleeping: sleeping, locked: service.locked)
             .padding(5)
             .background {
                 RoundedRectangle(cornerRadius: 12, style: .continuous)

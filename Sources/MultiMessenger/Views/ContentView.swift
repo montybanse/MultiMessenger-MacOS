@@ -100,8 +100,12 @@ struct ContentView: View {
     @ViewBuilder
     private var webArea: some View {
         if let service = app.selectedService {
-            WebContainer(service: service, manager: manager)
-                .id("\(service.id)-\(webRefresh)")
+            if app.needsUnlock(service) {
+                ServiceLockView(service: service).environmentObject(app)
+            } else {
+                WebContainer(service: service, manager: manager)
+                    .id("\(service.id)-\(webRefresh)")
+            }
         } else {
             EmptyState(activeSheet: $activeSheet)
         }

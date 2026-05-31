@@ -163,6 +163,30 @@ struct ServiceEditor: View {
             }
 
             Section {
+                Picker("Benachrichtigungen", selection: $draft.notificationStyle) {
+                    ForEach(NotificationStyle.allCases) { Text($0.label).tag($0) }
+                }
+                .disabled(draft.muted)
+                TextField("Nur bei Stichwort (kommagetrennt, optional)",
+                          text: $draft.notificationKeywords)
+                    .disabled(draft.muted || draft.notificationStyle == .off)
+            } header: {
+                Text("Benachrichtigungsregeln")
+            } footer: {
+                Text(draft.muted
+                     ? "Dieser Dienst ist stummgeschaltet – es kommen keine Benachrichtigungen."
+                     : "Stichwörter: z. B. „@monty, dringend“ → es wird nur benachrichtigt, wenn eines davon im Titel/Text vorkommt. Leer = alle Nachrichten.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+
+            Section {
+                Toggle("Dienst mit Touch ID / Passwort schützen", isOn: $draft.locked)
+            } footer: {
+                Text("Beim Öffnen dieses Dienstes wird eine Entsperrung verlangt – praktisch für private Accounts.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+
+            Section {
                 Picker("Browser-Kennung", selection: uaPresetBinding) {
                     Text("Standard (Safari)").tag(0)
                     Text("Chrome").tag(1)

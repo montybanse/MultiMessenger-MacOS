@@ -18,13 +18,18 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
     }
 
     func post(serviceID: UUID, serviceName: String, title: String, body: String,
-              iconURLString: String = "", fallbackIcon: Data? = nil) {
+              iconURLString: String = "", fallbackIcon: Data? = nil,
+              showBanner: Bool = true, playSound: Bool = true) {
         let content = UNMutableNotificationContent()
         content.title = title
         if !body.isEmpty { content.body = body }
         content.subtitle = (title == serviceName) ? "" : serviceName
-        content.sound = .default
-        content.userInfo = ["serviceID": serviceID.uuidString]
+        content.sound = playSound ? .default : nil
+        content.userInfo = [
+            "serviceID": serviceID.uuidString,
+            "showBanner": showBanner,
+            "playSound": playSound
+        ]
 
         // Icon laden (Kontaktbild aus der Web-Benachrichtigung) und als Anhang
         // anzeigen; sonst auf das Dienst-Icon zurückfallen.
@@ -68,11 +73,18 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
         }
     }
 
-    // Benachrichtigungen auch anzeigen, wenn die App im Vordergrund ist.
+    // Benachrichtigungen auch anzeigen, wenn die App im Vordergrund ist –
+    // unter Beachtung der Dienst-Regel (Banner/Ton einzeln steuerbar).
     func userNotificationCenter(_ center: UNUserNotificationCenter,
                                 willPresent notification: UNNotification,
                                 withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
-        completionHandler([.banner, .sound, .list])
+        let info = notification.request.content.userInfo
+        let showBanner = (info["showBanner"] as? Bool) ?? true
+        let playSound = (info["playSound"] as? Bool) ?? true
+        var options: UNNotificationPresentationOptions = [.list]
+        if showBanner { options.insert(.banner) }
+        if playSound { options.insert(.sound) }
+        completionHandler(options)
     }
 
     // Klick auf Benachrichtigung -> zugehörigen Dienst öffnen.

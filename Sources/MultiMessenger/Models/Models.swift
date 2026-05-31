@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 
 // MARK: - Schlaf-Strategie pro Dienst
 
@@ -22,6 +23,53 @@ struct Workspace: Identifiable, Codable, Hashable {
     var id: UUID = UUID()
     var name: String
     var symbol: String = "square.grid.2x2"
+    /// Optionale Akzentfarbe des Workspace (Schlüssel aus AccentPalette).
+    /// nil = System-Akzentfarbe.
+    var accentKey: String? = nil
+}
+
+// MARK: - Akzentfarben (pro Workspace wählbar)
+
+enum AccentPalette {
+    /// Reihenfolge stabil halten – die Schlüssel werden gespeichert.
+    static let options: [(key: String, label: String, color: Color)] = [
+        ("blue",   "Blau",    .blue),
+        ("green",  "Grün",    .green),
+        ("orange", "Orange",  .orange),
+        ("pink",   "Pink",    .pink),
+        ("purple", "Violett", .purple),
+        ("teal",   "Türkis",  .teal),
+        ("red",    "Rot",     .red),
+        ("indigo", "Indigo",  .indigo),
+        ("yellow", "Gelb",    .yellow),
+        ("mint",   "Mint",    .mint),
+    ]
+
+    static func color(for key: String?) -> Color? {
+        guard let key else { return nil }
+        return options.first { $0.key == key }?.color
+    }
+}
+
+// MARK: - Benachrichtigungs-Regel pro Dienst
+
+enum NotificationStyle: String, Codable, CaseIterable, Identifiable {
+    case bannerAndSound   // Banner + Ton (Standard)
+    case bannerOnly       // nur Banner, kein Ton
+    case soundOnly        // nur Ton, kein Banner
+    case off              // keine Benachrichtigungen
+
+    var id: String { rawValue }
+    var label: String {
+        switch self {
+        case .bannerAndSound: return "Banner + Ton"
+        case .bannerOnly:     return "Nur Banner"
+        case .soundOnly:      return "Nur Ton"
+        case .off:            return "Aus"
+        }
+    }
+    var showsBanner: Bool { self == .bannerAndSound || self == .bannerOnly }
+    var playsSound: Bool  { self == .bannerAndSound || self == .soundOnly }
 }
 
 // MARK: - Dienst
@@ -58,8 +106,28 @@ struct Service: Identifiable, Codable, Hashable {
     /// Manche Dienste (z.B. Slack, MS Teams) verlangen eine Chrome-Kennung.
     var userAgent: String = ""
 
+    /// Art der Benachrichtigung für diesen Dienst.
+    var notificationStyle: NotificationStyle = .bannerAndSound
+    /// Optionaler Stichwort-Filter: nur benachrichtigen, wenn Titel/Text eines
+    /// dieser (kommagetrennten) Wörter enthält. Leer = alle Nachrichten.
+    var notificationKeywords: String = ""
+
+    /// Dienst hinter Touch ID / Passwort verbergen (zusätzlich zur App-Sperre).
+    var locked: Bool = false
+
     var host: String? {
         URL(string: urlString)?.host
+    }
+
+    /// Prüft, ob eine Benachrichtigung mit diesem Titel/Text den Stichwortfilter passiert.
+    func matchesNotificationFilter(title: String, body: String) -> Bool {
+        let words = notificationKeywords
+            .split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
+            .filter { !$0.isEmpty }
+        if words.isEmpty { return true }
+        let haystack = (title + " " + body).lowercased()
+        return words.contains { haystack.contains($0) }
     }
 }
 

@@ -9,6 +9,7 @@ struct ServiceIconView: View {
     var unread: Int = 0
     var muted: Bool = false
     var sleeping: Bool = false
+    var locked: Bool = false
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
@@ -23,6 +24,16 @@ struct ServiceIconView: View {
                             .font(.system(size: size * 0.42, weight: .semibold))
                             .foregroundStyle(.white, .secondary)
                             .shadow(radius: 1)
+                    }
+                }
+                .overlay(alignment: .bottomTrailing) {
+                    if locked {
+                        Image(systemName: "lock.fill")
+                            .font(.system(size: size * 0.26, weight: .bold))
+                            .foregroundStyle(.white)
+                            .padding(2)
+                            .background(Color.black.opacity(0.55), in: Circle())
+                            .offset(x: 3, y: 3)
                     }
                 }
 

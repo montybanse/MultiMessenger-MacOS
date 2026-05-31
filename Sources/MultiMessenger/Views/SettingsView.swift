@@ -89,8 +89,10 @@ struct SettingsView: View {
                     ForEach(app.workspaces) { ws in
                         HStack {
                             Image(systemName: ws.symbol)
+                                .foregroundStyle(AccentPalette.color(for: ws.accentKey) ?? .secondary)
                             Text(ws.name)
                             Spacer()
+                            accentMenu(for: ws)
                             Button(role: .destructive) { app.removeWorkspace(ws.id) } label: {
                                 Image(systemName: "trash")
                             }
@@ -99,7 +101,7 @@ struct SettingsView: View {
                     }
                 }
             }
-            Section("Neuer Workspace") {
+            Section {
                 HStack {
                     TextField("Name", text: $newWorkspaceName)
                     Button("Anlegen") {
@@ -110,9 +112,47 @@ struct SettingsView: View {
                     }
                     .disabled(newWorkspaceName.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
+            } header: {
+                Text("Neuer Workspace")
+            } footer: {
+                Text("Tipp: Gib jedem Workspace eine eigene Akzentfarbe (über das Farbmenü) – die Oberfläche färbt sich dann passend, sobald der Workspace aktiv ist.")
+                    .font(.caption).foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)
+    }
+
+    /// Farb-Auswahlmenü für einen Workspace.
+    private func accentMenu(for ws: Workspace) -> some View {
+        Menu {
+            Button {
+                updateWorkspaceAccent(ws, key: nil)
+            } label: {
+                Label("System-Akzent", systemImage: ws.accentKey == nil ? "checkmark" : "circle")
+            }
+            Divider()
+            ForEach(AccentPalette.options, id: \.key) { opt in
+                Button {
+                    updateWorkspaceAccent(ws, key: opt.key)
+                } label: {
+                    Label(opt.label, systemImage: ws.accentKey == opt.key ? "checkmark.circle.fill" : "circle.fill")
+                }
+            }
+        } label: {
+            Circle()
+                .fill(AccentPalette.color(for: ws.accentKey) ?? .gray)
+                .frame(width: 16, height: 16)
+                .overlay(Circle().strokeBorder(.quaternary))
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help("Akzentfarbe wählen")
+    }
+
+    private func updateWorkspaceAccent(_ ws: Workspace, key: String?) {
+        guard let idx = app.workspaces.firstIndex(where: { $0.id == ws.id }) else { return }
+        app.workspaces[idx].accentKey = key
     }
 
     // MARK: Erweitert
@@ -231,7 +271,7 @@ struct SettingsView: View {
     private static let repoURL = "https://github.com/montybanse/MultiMessenger-MacOS"
 
     private var appVersion: String {
-        let v = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.1.0"
+        let v = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.2.0"
         let b = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
         return "Version \(v) (Build \(b))"
     }

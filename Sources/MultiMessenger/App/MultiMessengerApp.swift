@@ -63,6 +63,7 @@ struct RootView: View {
             .environmentObject(manager)
             .environmentObject(icons)
             .preferredColorScheme(app.colorScheme)
+            .tint(app.currentAccent)   // Workspace-Akzentfarbe (nil = System)
             .overlay {
                 if app.isLocked {
                     LockView().environmentObject(app)

@@ -150,7 +150,14 @@ final class WebViewManager: ObservableObject {
     private func handleNotify(serviceID: UUID, title: String, body: String, iconURL: String) {
         guard let service = appState.services.first(where: { $0.id == serviceID }) else { return }
         appState.bumpUnread(for: serviceID)
-        if service.muted || appState.settings.dndEnabled { return }
+
+        // Globales DND, Stummschaltung oder Stil "aus" -> keine Benachrichtigung.
+        if appState.settings.dndEnabled || service.muted { return }
+        let style = service.notificationStyle
+        if style == .off { return }
+        // Stichwort-Filter (falls gesetzt).
+        if !service.matchesNotificationFilter(title: title, body: body) { return }
+
         let fallback = service.iconData ?? service.faviconData
         NotificationManager.shared.post(
             serviceID: serviceID,
@@ -158,7 +165,9 @@ final class WebViewManager: ObservableObject {
             title: title.isEmpty ? service.name : title,
             body: body,
             iconURLString: iconURL,
-            fallbackIcon: fallback
+            fallbackIcon: fallback,
+            showBanner: style.showsBanner,
+            playSound: style.playsSound
         )
     }
 }

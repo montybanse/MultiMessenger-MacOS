@@ -1,0 +1,25 @@
+# Build-Artefakte
+.build/
+build/
+*.o
+*.swiftmodule
+
+# Lokale Backups / Zwischenstände
+backups/
+
+# macOS
+.DS_Store
+
+# Hinweis: Resources/AppIcon.icns IST eingecheckt (damit ein Clone sofort ein
+# Icon hat); neu erzeugen jederzeit mit ./make-icon.sh.
+
+# Hinweis: dist/ wird NICHT ignoriert – die fertige .dmg liegt dort und soll
+# (per Release oder direkt) verteilt werden. Das .app-Bundle darin wird unten
+# ausgeschlossen, damit nur die .dmg eingecheckt wird.
+dist/*.app/
+
+# Claude Code lokale Einstellungen
+.claude/
+
+# DMG nur als Release-Asset, nicht im Repo
+dist/*.dmg

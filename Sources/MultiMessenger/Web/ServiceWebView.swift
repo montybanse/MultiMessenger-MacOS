@@ -211,6 +211,22 @@ extension ServiceWebView: WKUIDelegate {
                  decisionHandler: @escaping (WKPermissionDecision) -> Void) {
         decisionHandler(.grant)
     }
+
+    // Datei-Upload: nativen Auswahl-Dialog öffnen, wenn die Seite <input type="file">
+    // auslöst. Ohne diese Methode passiert beim Klick auf das Upload-Symbol nichts
+    // (z.B. in Mattermost). Drag&Drop läuft über einen anderen Pfad und ging daher.
+    func webView(_ webView: WKWebView,
+                 runOpenPanelWith parameters: WKOpenPanelParameters,
+                 initiatedByFrame frame: WKFrameInfo,
+                 completionHandler: @escaping ([URL]?) -> Void) {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = parameters.allowsDirectories
+        panel.allowsMultipleSelection = parameters.allowsMultipleSelection
+        panel.begin { response in
+            completionHandler(response == .OK ? panel.urls : nil)
+        }
+    }
 }
 
 extension ServiceWebView: WKDownloadDelegate {

@@ -109,22 +109,32 @@ enum Bridge {
                             if (!constraints || !constraints.audio || GAIN === 1) return stream;
                             var AC = window.AudioContext || window.webkitAudioContext;
                             if (!AC) return stream;
-                            var ctx = new AC();
-                            // AudioContext bei Autoplay-Sperre aufwecken – sonst fließt
-                            // kein Ton und die Verstärkung bliebe wirkungslos.
+
+                            // WICHTIG: nur EINEN AudioContext wiederverwenden. Früher wurde
+                            // pro getUserMedia ein neuer erzeugt und nie geschlossen – BBB
+                            // ruft das mehrfach auf -> AudioContext-Leak -> Audio-Subsystem
+                            // überlastet -> system­weiter Tastatur-Freeze. Jetzt geteilt.
+                            if (!window.__mmAudioCtx) { window.__mmAudioCtx = new AC(); }
+                            var ctx = window.__mmAudioCtx;
                             if (ctx.state === 'suspended') { try { ctx.resume(); } catch (e) {} }
+
                             var src = ctx.createMediaStreamSource(stream);
                             var g = ctx.createGain();
                             g.gain.value = GAIN;
                             var dest = ctx.createMediaStreamDestination();
                             src.connect(g); g.connect(dest);
 
-                            // Verstärkte Audiospur in den Original-Stream einsetzen,
-                            // Videospuren unverändert lassen.
                             var out = dest.stream.getAudioTracks()[0];
+
+                            // Aufräumen: wenn die verstärkte Spur endet (Anruf vorbei,
+                            // Mikrowechsel), die WebAudio-Knoten trennen -> kein Leak.
+                            out.addEventListener('ended', function() {
+                                try { src.disconnect(); g.disconnect(); } catch (e) {}
+                            });
+
                             stream.getAudioTracks().forEach(function(t) {
                                 stream.removeTrack(t);
-                                // Original-Track stoppen wir NICHT (sonst endet die Quelle).
+                                // Original-Track NICHT stoppen (sonst endet die Quelle).
                             });
                             stream.addTrack(out);
                             return stream;

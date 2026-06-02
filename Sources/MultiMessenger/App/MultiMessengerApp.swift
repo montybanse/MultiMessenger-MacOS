@@ -22,7 +22,7 @@ struct MultiMessengerApp: App {
                 Button("Schnell wechseln …") {
                     delegate.app.showQuickSwitcher.toggle()
                 }
-                .keyboardShortcut("k", modifiers: .command)
+                .keyboardShortcut("j", modifiers: .command)
 
                 Button("Aktuellen Dienst neu laden") {
                     if let id = delegate.app.selectedServiceID {

@@ -66,7 +66,12 @@ struct ContentView: View {
                 // Geänderte globale Einstellungen (User-Agent, Mikrofon, Inspektor)
                 // sofort wirksam machen, ohne Neustart.
                 manager.recreateAll(currentSelection: app.selectedServiceID)
-                webRefresh += 1
+                webRefresh += 1   // sichtbaren Dienst neu rendern/laden
+                // „Immer wach"-Dienste sofort wieder vorladen, statt sie schlafen
+                // zu lassen (sonst kämen ihre Benachrichtigungen erst beim Öffnen).
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    manager.preloadAlwaysAwake()
+                }
             }
             .onReceive(NotificationCenter.default.publisher(for: .fillLogin)) { note in
                 if let id = note.object as? UUID {

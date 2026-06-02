@@ -117,7 +117,7 @@ Schlüsselbund-Passwort):
 - **Login-Helfer** (Schlüsselbund, optional Touch ID) – Ausfüllen per ⌘⇧L
 - **Touch-ID-/Passwort-Sperre** der App (optional)
 - **Autostart** beim Anmelden + Hintergrundbetrieb
-- **Tastatur:** ⌘1…9 Dienst wechseln · ⌘K Schnell-Umschalter · ⌘R neu laden ·
+- **Tastatur:** ⌘1…9 Dienst wechseln · ⌘J Schnell-Umschalter · ⌘R neu laden ·
   ⌘⇧M global hervorholen · ⌘⇧L Login ausfüllen
 - **Teilen:** Links per Teilen-Menü / Dienste-Menü / URL-Schema `mmsg://` an einen
   Dienst übergeben (praktisch z. B. für BBB-Links aus dem Kalender)

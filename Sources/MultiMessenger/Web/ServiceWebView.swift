@@ -11,6 +11,9 @@ final class ServiceWebView: NSObject {
     var onNotify: ((_ serviceID: UUID, _ title: String, _ body: String, _ iconURL: String) -> Void)?
     var onBadge:  ((_ serviceID: UUID, _ count: Int) -> Void)?
 
+    /// Zielpfade laufender Downloads (für die „Download fertig"-Benachrichtigung).
+    private var downloadDestinations: [WKDownload: URL] = [:]
+
     init(service: Service, customUserAgent: String, micCompatMode: Bool, micGain: Double,
          webInspector: Bool) {
         self.serviceID = service.id
@@ -244,11 +247,21 @@ extension ServiceWebView: WKDownloadDelegate {
             dest = downloads.appendingPathComponent(name)
             i += 1
         }
+        // Ziel merken, um bei Fertigstellung darüber zu benachrichtigen.
+        downloadDestinations[download] = dest
         completionHandler(dest)
     }
 
-    func download(_ download: WKDownload, didFailWithError error: Error, resumeData: Data?) {}
-    func downloadDidFinish(_ download: WKDownload) {}
+    func download(_ download: WKDownload, didFailWithError error: Error, resumeData: Data?) {
+        downloadDestinations[download] = nil
+    }
+
+    func downloadDidFinish(_ download: WKDownload) {
+        if let url = downloadDestinations[download] {
+            NotificationManager.shared.postDownloadComplete(fileURL: url)
+            downloadDestinations[download] = nil
+        }
+    }
 }
 
 /// Verhindert einen Retain-Cycle zwischen WKUserContentController und ServiceWebView.

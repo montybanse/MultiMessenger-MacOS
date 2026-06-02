@@ -11,10 +11,39 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
 
     private override init() { super.init() }
 
+    // Aktions-IDs für Download-Benachrichtigungen.
+    private static let downloadCategory = "DOWNLOAD_DONE"
+    private static let actionOpenFile = "OPEN_FILE"
+    private static let actionReveal = "REVEAL_FILE"
+
     func setup() {
         let center = UNUserNotificationCenter.current()
         center.delegate = self
         center.requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in }
+
+        // Kategorie für Downloads mit Aktions-Buttons registrieren.
+        let open = UNNotificationAction(identifier: Self.actionOpenFile,
+                                        title: "Öffnen", options: [.foreground])
+        let reveal = UNNotificationAction(identifier: Self.actionReveal,
+                                          title: "Im Finder zeigen", options: [.foreground])
+        let category = UNNotificationCategory(identifier: Self.downloadCategory,
+                                              actions: [open, reveal],
+                                              intentIdentifiers: [], options: [])
+        center.setNotificationCategories([category])
+    }
+
+    /// Benachrichtigung nach abgeschlossenem Download – mit Öffnen / Im Finder zeigen.
+    func postDownloadComplete(fileURL: URL) {
+        let content = UNMutableNotificationContent()
+        content.title = "Download abgeschlossen"
+        content.body = fileURL.lastPathComponent
+        content.sound = .default
+        content.categoryIdentifier = Self.downloadCategory
+        content.userInfo = ["downloadPath": fileURL.path]
+
+        let request = UNNotificationRequest(identifier: UUID().uuidString,
+                                            content: content, trigger: nil)
+        UNUserNotificationCenter.current().add(request)
     }
 
     func post(serviceID: UUID, serviceName: String, title: String, body: String,
@@ -87,11 +116,31 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
         completionHandler(options)
     }
 
-    // Klick auf Benachrichtigung -> zugehörigen Dienst öffnen.
+    // Klick auf Benachrichtigung -> Dienst öffnen bzw. Download-Aktion ausführen.
     func userNotificationCenter(_ center: UNUserNotificationCenter,
                                 didReceive response: UNNotificationResponse,
                                 withCompletionHandler completionHandler: @escaping () -> Void) {
-        if let idString = response.notification.request.content.userInfo["serviceID"] as? String,
+        let info = response.notification.request.content.userInfo
+
+        // Download-Benachrichtigung?
+        if let path = info["downloadPath"] as? String {
+            let url = URL(fileURLWithPath: path)
+            DispatchQueue.main.async {
+                switch response.actionIdentifier {
+                case Self.actionOpenFile:
+                    // Datei direkt öffnen.
+                    NSWorkspace.shared.open(url)
+                default:
+                    // Standard-Klick oder „Im Finder zeigen" -> im Finder markieren.
+                    NSWorkspace.shared.activateFileViewerSelecting([url])
+                }
+            }
+            completionHandler()
+            return
+        }
+
+        // Sonst: Nachricht eines Dienstes -> Dienst öffnen.
+        if let idString = info["serviceID"] as? String,
            let id = UUID(uuidString: idString) {
             DispatchQueue.main.async { [weak self] in
                 NSApp.activate(ignoringOtherApps: true)

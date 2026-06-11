@@ -408,7 +408,7 @@ struct SettingsView: View {
     private static let repoURL = "https://github.com/montybanse/MultiMessenger-MacOS"
 
     private var appVersion: String {
-        let v = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.3.1"
+        let v = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.3.2"
         let b = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
         return "Version \(v) (Build \(b))"
     }

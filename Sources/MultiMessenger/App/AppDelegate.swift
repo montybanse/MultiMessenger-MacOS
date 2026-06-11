@@ -115,30 +115,39 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         for url in urls { route(url) }
     }
 
-    /// Verarbeitet `mmsg://<echte-URL>` bzw. `mmsg://open?url=<encoded>`.
+    /// Verarbeitet `mmsg://<echte-URL>`, `mmsg://open?url=<encoded>` sowie
+    /// direkt übergebene http/https-Links („Öffnen mit“-Menü).
     /// Sucht den Dienst, dessen Host zur Ziel-URL passt, lädt die URL dort und
     /// holt das Fenster nach vorne. Praktisch für BBB-Links aus dem Kalender.
     private func route(_ url: URL) {
-        guard url.scheme?.lowercased() == "mmsg" else { return }
-
-        // Ziel-URL extrahieren.
+        let scheme = url.scheme?.lowercased()
         var target = ""
-        if let comps = URLComponents(url: url, resolvingAgainstBaseURL: false),
-           let q = comps.queryItems?.first(where: { $0.name == "url" })?.value, !q.isEmpty {
-            target = q
-        } else {
-            // Alles nach "mmsg://" bzw. "mmsg:" als rohe URL behandeln.
-            var s = url.absoluteString
-            if let r = s.range(of: "mmsg://") { s.removeSubrange(s.startIndex..<r.upperBound) }
-            else if let r = s.range(of: "mmsg:") { s.removeSubrange(s.startIndex..<r.upperBound) }
-            target = s.removingPercentEncoding ?? s
+        var isShare = false
+
+        switch scheme {
+        case "http", "https":
+            // Direkt geöffneter Web-Link -> wie geteilte URL behandeln.
+            target = url.absoluteString
+        case "mmsg":
+            // Ziel-URL extrahieren.
+            if let comps = URLComponents(url: url, resolvingAgainstBaseURL: false),
+               let q = comps.queryItems?.first(where: { $0.name == "url" })?.value, !q.isEmpty {
+                target = q
+            } else {
+                // Alles nach "mmsg://" bzw. "mmsg:" als rohe URL behandeln.
+                var s = url.absoluteString
+                if let r = s.range(of: "mmsg://") { s.removeSubrange(s.startIndex..<r.upperBound) }
+                else if let r = s.range(of: "mmsg:") { s.removeSubrange(s.startIndex..<r.upperBound) }
+                target = s.removingPercentEncoding ?? s
+            }
+            isShare = url.host?.lowercased() == "share"
+                || url.absoluteString.lowercased().contains("mmsg://share")
+        default:
+            return
         }
         target = target.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !target.isEmpty else { return }
         if !target.contains("://") { target = "https://" + target }
-
-        let isShare = url.host?.lowercased() == "share"
-            || url.absoluteString.lowercased().contains("mmsg://share")
 
         // „share“ -> immer Auswahldialog. Sonst per Host automatisch zuordnen.
         if isShare {

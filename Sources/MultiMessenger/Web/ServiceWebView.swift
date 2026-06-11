@@ -26,6 +26,11 @@ final class ServiceWebView: NSObject {
         config.defaultWebpagePreferences.allowsContentJavaScript = true
         config.mediaTypesRequiringUserActionForPlayback = []
         config.preferences.isElementFullscreenEnabled = true
+        if webInspector {
+            // Fügt dem Rechtsklick-Menü „Element-Informationen" hinzu –
+            // isInspectable allein erlaubt nur den Zugriff über Safari → Entwickler.
+            config.preferences.setValue(true, forKey: "developerExtrasEnabled")
+        }
 
         let controller = WKUserContentController()
         if adBlock, let rules = AdBlocker.compiled {
@@ -33,6 +38,11 @@ final class ServiceWebView: NSObject {
         }
         controller.addUserScript(WKUserScript(
             source: Bridge.userScript,
+            injectionTime: .atDocumentStart,
+            forMainFrameOnly: false
+        ))
+        controller.addUserScript(WKUserScript(
+            source: Bridge.videoCompositeFixScript,
             injectionTime: .atDocumentStart,
             forMainFrameOnly: false
         ))

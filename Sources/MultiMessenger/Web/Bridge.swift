@@ -78,6 +78,44 @@ enum Bridge {
     })();
     """
 
+    /// Workaround für einen WebKit-Bug: `drawImage(<video>)` ignoriert den
+    /// aktiven `globalCompositeOperation` (GPU-Pfad des Videos). Dadurch
+    /// scheitern Canvas-basierte virtuelle Hintergründe (BBB, Jitsi …):
+    /// die Personen-Maske ('source-in') wird vom voll gezeichneten Video
+    /// übermalt, der Hintergrund bleibt unsichtbar. Fix: Video-Frames bei
+    /// nicht-trivialem Composite-Modus durch ein Zwischen-Canvas leiten.
+    /// (Per Probe verifiziert: Original-Sequenz kaputt, mit Wrapper korrekt.)
+    static let videoCompositeFixScript = """
+    (function() {
+        try {
+            var proto = CanvasRenderingContext2D.prototype;
+            var orig = proto.drawImage;
+            var tmp = null, tctx = null;
+            proto.drawImage = function() {
+                var s = arguments[0];
+                if (s && s.tagName === 'VIDEO' && s.videoWidth > 0 &&
+                    this.globalCompositeOperation !== 'source-over') {
+                    try {
+                        if (!tmp) {
+                            tmp = document.createElement('canvas');
+                            tctx = tmp.getContext('2d');
+                        }
+                        if (tmp.width !== s.videoWidth || tmp.height !== s.videoHeight) {
+                            tmp.width = s.videoWidth;
+                            tmp.height = s.videoHeight;
+                        }
+                        tctx.drawImage(s, 0, 0);
+                        var args = Array.prototype.slice.call(arguments);
+                        args[0] = tmp;
+                        return orig.apply(this, args);
+                    } catch (e) { /* im Zweifel Originalverhalten */ }
+                }
+                return orig.apply(this, arguments);
+            };
+        } catch (e) {}
+    })();
+    """
+
     /// Behebt drei Probleme des eingebauten Mac-Mikrofons in WebRTC-Anrufen:
     ///  1) Stummbleiben durch den macOS-Voice-Processing-Konflikt
     ///     → echoCancellation aus (umgeht die problematische Audio-Unit).

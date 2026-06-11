@@ -236,7 +236,16 @@ struct SettingsView: View {
             Section("Sicherheit & Bedienung") {
                 Toggle("App mit Touch ID / Passwort sperren", isOn: Binding(
                     get: { app.settings.lockEnabled },
-                    set: { app.settings.lockEnabled = $0 }
+                    set: { newValue in
+                        if !newValue && app.settings.lockEnabled {
+                            // Abschalten nur nach erfolgreicher Authentifizierung.
+                            BiometricAuth.authenticate(reason: "die App-Sperre zu deaktivieren") { ok in
+                                if ok { app.settings.lockEnabled = false }
+                            }
+                        } else {
+                            app.settings.lockEnabled = newValue
+                        }
+                    }
                 ))
                 Toggle("Globaler Hotkey (⌘⇧M) zum Hervorholen", isOn: Binding(
                     get: { app.settings.globalHotkeyEnabled },
@@ -408,7 +417,7 @@ struct SettingsView: View {
     private static let repoURL = "https://github.com/montybanse/MultiMessenger-MacOS"
 
     private var appVersion: String {
-        let v = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.3.2"
+        let v = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.3.3"
         let b = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
         return "Version \(v) (Build \(b))"
     }

@@ -183,7 +183,20 @@ struct ServiceEditor: View {
             }
 
             Section {
-                Toggle("Dienst mit Touch ID / Passwort schützen", isOn: $draft.locked)
+                Toggle("Dienst mit Touch ID / Passwort schützen", isOn: Binding(
+                    get: { draft.locked },
+                    set: { newValue in
+                        if !newValue && draft.locked {
+                            // Abschalten nur nach erfolgreicher Authentifizierung –
+                            // sonst ließe sich die Sperre einfach wegklicken.
+                            BiometricAuth.authenticate(reason: "den Schutz von „\(draft.name)“ aufzuheben") { ok in
+                                if ok { draft.locked = false }
+                            }
+                        } else {
+                            draft.locked = newValue
+                        }
+                    }
+                ))
             } footer: {
                 Text("Beim Öffnen dieses Dienstes wird eine Entsperrung verlangt – praktisch für private Accounts.")
                     .font(.caption).foregroundStyle(.secondary)

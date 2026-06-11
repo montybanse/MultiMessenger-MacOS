@@ -13,6 +13,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var didConfigureWindow = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Web-Daten der alten Bundle-ID übernehmen (einmalig, vor jeder WebView).
+        Self.migrateLegacyWebKitData()
+
+        // Werbe-/Tracker-Regeln vorkompilieren (greifen für neue WebViews).
+        AdBlocker.prepare()
+
         // Mitteilungen
         NotificationManager.shared.setup()
         NotificationManager.shared.onActivateService = { [weak self] id in
@@ -76,6 +82,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // „Immer wach“-Dienste im Hintergrund vorladen (Benachrichtigungen ab Start).
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
             self?.manager.preloadAlwaysAwake()
+        }
+
+        // Auf neue Version prüfen (gedrosselt auf 1x pro Tag).
+        UpdateChecker.shared.checkAtLaunch(enabled: app.settings.updateCheckEnabled)
+    }
+
+    /// Die Bundle-ID wurde mit v0.3.0 gewechselt (eu.montybanse.MultiMessenger →
+    /// …MultiMessengerApp), weil sich die alte ID in den Benachrichtigungs-Caches
+    /// von macOS dauerhaft als „App ohne Icon" eingebrannt hatte. Die Sessions/
+    /// Cookies der Dienste liegen aber unter ~/Library/WebKit/<bundle-id> bzw.
+    /// ~/Library/HTTPStorages/<bundle-id> – beim ersten Start mit neuer ID einmal
+    /// umziehen, damit niemand neu eingeloggt werden muss.
+    private static func migrateLegacyWebKitData() {
+        let oldID = "eu.montybanse.MultiMessenger"
+        guard let newID = Bundle.main.bundleIdentifier, newID != oldID else { return }
+        let fm = FileManager.default
+        guard let lib = fm.urls(for: .libraryDirectory, in: .userDomainMask).first else { return }
+        for sub in ["WebKit", "HTTPStorages"] {
+            let old = lib.appendingPathComponent(sub).appendingPathComponent(oldID)
+            let new = lib.appendingPathComponent(sub).appendingPathComponent(newID)
+            if fm.fileExists(atPath: old.path), !fm.fileExists(atPath: new.path) {
+                try? fm.moveItem(at: old, to: new)
+                NSLog("Migration: \(sub)/\(oldID) → \(newID)")
+            }
         }
     }
 

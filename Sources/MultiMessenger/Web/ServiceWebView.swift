@@ -15,7 +15,7 @@ final class ServiceWebView: NSObject {
     private var downloadDestinations: [WKDownload: URL] = [:]
 
     init(service: Service, customUserAgent: String, micCompatMode: Bool, micGain: Double,
-         webInspector: Bool) {
+         webInspector: Bool, adBlock: Bool = false) {
         self.serviceID = service.id
 
         let config = WKWebViewConfiguration()
@@ -28,6 +28,9 @@ final class ServiceWebView: NSObject {
         config.preferences.isElementFullscreenEnabled = true
 
         let controller = WKUserContentController()
+        if adBlock, let rules = AdBlocker.compiled {
+            controller.add(rules)
+        }
         controller.addUserScript(WKUserScript(
             source: Bridge.userScript,
             injectionTime: .atDocumentStart,

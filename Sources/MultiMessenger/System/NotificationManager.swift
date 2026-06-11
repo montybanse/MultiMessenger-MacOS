@@ -32,6 +32,45 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
         center.setNotificationCategories([category])
     }
 
+    /// Sofortige Beispiel-Mitteilung (Einstellungen → Mitteilungen → Test).
+    /// Das App-Logo wird als Anhang (rechtes Bild) mitgegeben – das linke
+    /// App-Icon zeigt macOS bei nicht-notarisierten Apps leider nicht an.
+    func postTest() {
+        let content = UNMutableNotificationContent()
+        content.title = "MultiMessenger"
+        content.body = "Testbenachrichtigung – alles eingerichtet! 🎉"
+        content.sound = .default
+
+        Task {
+            if let attachment = await Self.makeAttachment(iconURLString: "",
+                                                          fallbackIcon: Self.appIconPNG()) {
+                content.attachments = [attachment]
+            }
+            let request = UNNotificationRequest(identifier: UUID().uuidString,
+                                                content: content, trigger: nil)
+            try? await UNUserNotificationCenter.current().add(request)
+        }
+    }
+
+    /// App-Icon als PNG-Daten (für Anhänge).
+    private static func appIconPNG() -> Data? {
+        guard let icon = NSApp.applicationIconImage,
+              let tiff = icon.tiffRepresentation,
+              let rep = NSBitmapImageRep(data: tiff) else { return nil }
+        return rep.representation(using: .png, properties: [:])
+    }
+
+    /// Hinweis auf eine neue Version – Klick öffnet die Release-Seite.
+    func postUpdateAvailable(version: String, url: String) {
+        let content = UNMutableNotificationContent()
+        content.title = "Update verfügbar"
+        content.body = "MultiMessenger \(version) ist erschienen. Klicken zum Herunterladen."
+        content.userInfo = ["updateURL": url]
+        let request = UNNotificationRequest(identifier: "mm-update-\(version)",
+                                            content: content, trigger: nil)
+        UNUserNotificationCenter.current().add(request)
+    }
+
     /// Benachrichtigung nach abgeschlossenem Download – mit Öffnen / Im Finder zeigen.
     func postDownloadComplete(fileURL: URL) {
         let content = UNMutableNotificationContent()
@@ -121,6 +160,13 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
                                 didReceive response: UNNotificationResponse,
                                 withCompletionHandler completionHandler: @escaping () -> Void) {
         let info = response.notification.request.content.userInfo
+
+        // Update-Hinweis? -> Release-Seite im Browser öffnen.
+        if let urlString = info["updateURL"] as? String, let url = URL(string: urlString) {
+            DispatchQueue.main.async { NSWorkspace.shared.open(url) }
+            completionHandler()
+            return
+        }
 
         // Download-Benachrichtigung?
         if let path = info["downloadPath"] as? String {

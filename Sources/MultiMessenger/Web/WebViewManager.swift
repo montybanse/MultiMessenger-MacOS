@@ -29,7 +29,8 @@ final class WebViewManager: ObservableObject {
         let swv = ServiceWebView(service: service, customUserAgent: appState.settings.customUserAgent,
                                  micCompatMode: appState.settings.micCompatMode,
                                  micGain: appState.settings.micGain,
-                                 webInspector: appState.settings.webInspectorEnabled)
+                                 webInspector: appState.settings.webInspectorEnabled,
+                                 adBlock: appState.settings.adBlockEnabled)
         swv.onNotify = { [weak self] id, title, body, iconURL in
             self?.handleNotify(serviceID: id, title: title, body: body, iconURL: iconURL)
         }
@@ -151,8 +152,12 @@ final class WebViewManager: ObservableObject {
         guard let service = appState.services.first(where: { $0.id == serviceID }) else { return }
         appState.bumpUnread(for: serviceID)
 
-        // Globales DND, Stummschaltung oder Stil "aus" -> keine Benachrichtigung.
-        if appState.settings.dndEnabled || service.muted { return }
+        // Globales DND, Stummschaltung, Schlummern oder Stil "aus" -> keine Benachrichtigung.
+        if appState.settings.dndEnabled || service.muted || service.isSnoozed { return }
+        // Ruhezeiten des zugehörigen Workspace.
+        if let wsID = service.workspaceID,
+           let ws = appState.workspaces.first(where: { $0.id == wsID }),
+           ws.isQuietNow() { return }
         let style = service.notificationStyle
         if style == .off { return }
         // Stichwort-Filter (falls gesetzt).

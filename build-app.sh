@@ -52,6 +52,12 @@ codesign --force --sign "${SIGN_ID}" "${APPEX}"
 codesign --force --sign "${SIGN_ID}" "${APP}/Contents/MacOS/${APP_NAME}"
 codesign --force --deep --sign "${SIGN_ID}" "${APP}"
 
+# Die dist-Kopie bei LaunchServices abmelden: Zwei registrierte Kopien derselben
+# Bundle-ID führen dazu, dass die Mitteilungszentrale u.U. das App-Icon über die
+# (halb ersetzte) Build-Kopie auflöst -> leeres Logo in Benachrichtigungen.
+LSREG="/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
+"$LSREG" -u "$(pwd)/${APP}" 2>/dev/null || true
+
 echo ""
 echo "Fertig: ${APP}"
 echo "Starten mit:  open \"${APP}\""

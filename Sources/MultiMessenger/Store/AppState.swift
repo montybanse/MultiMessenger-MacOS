@@ -118,6 +118,11 @@ final class AppState: ObservableObject {
         workspaces.append(ws)
     }
 
+    func updateWorkspace(_ ws: Workspace) {
+        guard let idx = workspaces.firstIndex(where: { $0.id == ws.id }) else { return }
+        workspaces[idx] = ws
+    }
+
     func removeWorkspace(_ id: UUID) {
         workspaces.removeAll { $0.id == id }
         // Dienste dieses Workspace ohne Zuordnung lassen.

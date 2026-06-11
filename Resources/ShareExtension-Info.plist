@@ -7,7 +7,7 @@
     <key>CFBundleDisplayName</key>
     <string>An MultiMessenger senden</string>
     <key>CFBundleIdentifier</key>
-    <string>eu.montybanse.MultiMessenger.ShareExtension</string>
+    <string>eu.montybanse.MultiMessengerApp.ShareExtension</string>
     <key>CFBundleExecutable</key>
     <string>MMShareExtension</string>
     <key>CFBundlePackageType</key>

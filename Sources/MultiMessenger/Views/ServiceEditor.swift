@@ -1,5 +1,6 @@
 import SwiftUI
 import UniformTypeIdentifiers
+import WebKit
 
 struct ServiceEditor: View {
     enum Mode {
@@ -19,6 +20,8 @@ struct ServiceEditor: View {
     @State private var loginUser = ""
     @State private var loginPass = ""
     @State private var loginStored = false
+
+    @State private var showResetConfirm = false
 
     init(mode: Mode) {
         self.mode = mode
@@ -234,6 +237,28 @@ struct ServiceEditor: View {
                     .font(.caption).foregroundStyle(.secondary)
             }
 
+            if isEditing {
+                Section {
+                    Button("Website-Daten löschen & neu anmelden …", role: .destructive) {
+                        showResetConfirm = true
+                    }
+                    .confirmationDialog(
+                        "Website-Daten von „\(draft.name)“ löschen?",
+                        isPresented: $showResetConfirm, titleVisibility: .visible
+                    ) {
+                        Button("Daten löschen", role: .destructive) { resetWebsiteData() }
+                        Button("Abbrechen", role: .cancel) {}
+                    } message: {
+                        Text("Entfernt Cookies, Cache und alle gespeicherten Website-Daten dieses Dienstes – du wirst abgemeldet und kannst dich frisch verbinden (z.B. WhatsApp neu koppeln). Die Dienst-Einstellungen und Schlüsselbund-Anmeldedaten bleiben erhalten.")
+                    }
+                } header: {
+                    Text("Zurücksetzen")
+                } footer: {
+                    Text("Hilft, wenn ein Dienst hängt oder die Anmeldung kaputt ist.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+            }
+
             Section("Erweitert") {
                 VStack(alignment: .leading) {
                     Text("Eigenes CSS").font(.caption).foregroundStyle(.secondary)
@@ -253,6 +278,29 @@ struct ServiceEditor: View {
         }
         .formStyle(.grouped)
         .onAppear(perform: loadCredentials)
+    }
+
+    /// Setzt die Website-Daten des Dienstes zurück: Der Dienst bekommt einen
+    /// frischen (garantiert leeren) Datenspeicher, der alte wird im Hintergrund
+    /// gelöscht. Der Umweg über eine neue dataStoreID vermeidet Konflikte mit
+    /// einem evtl. noch geöffneten Speicher.
+    private func resetWebsiteData() {
+        let oldStoreID = draft.dataStoreID
+        draft.dataStoreID = UUID()
+        app.updateService(draft)
+        // Laufende WebView verwerfen -> wird mit dem neuen, leeren Speicher
+        // neu erzeugt (Login-Seite erscheint).
+        NotificationCenter.default.post(name: .discardService, object: draft.id)
+        // Alte Daten (Cookies, Cache, IndexedDB …) entfernen, sobald die
+        // WebView den Speicher freigegeben hat.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            WKWebsiteDataStore.remove(forIdentifier: oldStoreID) { error in
+                if let error {
+                    NSLog("Website-Daten-Reset: Löschen des alten Speichers: \(error.localizedDescription)")
+                }
+            }
+        }
+        dismiss()
     }
 
     private func loadCredentials() {

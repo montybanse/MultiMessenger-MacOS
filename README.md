@@ -22,10 +22,12 @@ Alternativen wie Franz oder Rambox, und es fügt sich nativ in macOS ein.
 - **Nutzung auf eigene Verantwortung.** Keine Garantie, keine Haftung. Du
   vertraust deine Messenger-Logins einer selbstgebauten App an – das solltest du
   bewusst entscheiden. Der Code liegt offen hier im Repo.
-- **Bekannte kosmetische Einschränkung:** In macOS-Benachrichtigungen bleibt das
-  kleine **App-Logo links leer** (das Kontaktbild rechts wird angezeigt). Ursache
-  ist die fehlende Apple-Notarisierung; ohne Developer-Account nicht lösbar. Die
-  Benachrichtigungen funktionieren ansonsten vollständig.
+- **Falls das App-Logo in Benachrichtigungen leer bleibt:** Das passiert, wenn
+  macOS die App mit einer älteren Version registriert hat. Lösung:
+  **Systemeinstellungen → Mitteilungen → Rechtsklick auf „MultiMessenger" →
+  „Zurücksetzen"**, danach die App neu starten und die Berechtigung erneut
+  erteilen. (Das Symbol neben dem App-Namen in der Mitteilungen-*Liste* kann
+  trotzdem leer bleiben – reiner Anzeige-Cache, die Banner sind korrekt.)
 
 ---
 
@@ -130,7 +132,8 @@ Schlüsselbund-Passwort):
 
 ## Bekannte Einschränkungen
 
-- **Notification-App-Logo links leer** – siehe oben (Notarisierung).
+- **Notification-App-Logo links leer** – einmalig per Systemeinstellungen →
+  Mitteilungen → Rechtsklick → „Zurücksetzen" + App-Neustart beheben (siehe oben).
 - **WhatsApp-Anrufe** funktionieren nicht – WhatsApp Web unterstützt Sprach-/
   Videoanrufe in **keinem** Browser, nur in den nativen Apps.
 - **Mikrofon-Lautstärke** interner Mac-Mikrofone kann in manchen Diensten leiser

@@ -27,6 +27,13 @@ struct Workspace: Identifiable, Codable, Hashable {
     /// nil = System-Akzentfarbe.
     var accentKey: String? = nil
 
+    /// Ruhezeiten: Benachrichtigungen aller Dienste dieses Workspace im
+    /// Zeitfenster unterdrücken. Minuten seit Mitternacht; das Fenster darf
+    /// über Mitternacht gehen (z.B. 18:00–08:00).
+    var quietHoursEnabled: Bool = false
+    var quietStartMinutes: Int = 18 * 60
+    var quietEndMinutes: Int = 8 * 60
+
     init(id: UUID = UUID(), name: String, symbol: String = "square.grid.2x2", accentKey: String? = nil) {
         self.id = id; self.name = name; self.symbol = symbol; self.accentKey = accentKey
     }
@@ -38,6 +45,22 @@ struct Workspace: Identifiable, Codable, Hashable {
         name      = try c.decodeIfPresent(String.self, forKey: .name) ?? ""
         symbol    = try c.decodeIfPresent(String.self, forKey: .symbol) ?? "square.grid.2x2"
         accentKey = try c.decodeIfPresent(String.self, forKey: .accentKey)
+        quietHoursEnabled = try c.decodeIfPresent(Bool.self, forKey: .quietHoursEnabled) ?? false
+        quietStartMinutes = try c.decodeIfPresent(Int.self,  forKey: .quietStartMinutes) ?? 18 * 60
+        quietEndMinutes   = try c.decodeIfPresent(Int.self,  forKey: .quietEndMinutes) ?? 8 * 60
+    }
+
+    /// Liegt `date` innerhalb der Ruhezeiten dieses Workspace?
+    func isQuietNow(_ date: Date = Date()) -> Bool {
+        guard quietHoursEnabled, quietStartMinutes != quietEndMinutes else { return false }
+        let comps = Calendar.current.dateComponents([.hour, .minute], from: date)
+        let now = (comps.hour ?? 0) * 60 + (comps.minute ?? 0)
+        if quietStartMinutes < quietEndMinutes {
+            return now >= quietStartMinutes && now < quietEndMinutes
+        } else {
+            // Fenster über Mitternacht (z.B. 18:00–08:00).
+            return now >= quietStartMinutes || now < quietEndMinutes
+        }
     }
 }
 
@@ -128,6 +151,14 @@ struct Service: Identifiable, Codable, Hashable {
     /// Dienst hinter Touch ID / Passwort verbergen (zusätzlich zur App-Sperre).
     var locked: Bool = false
 
+    /// Benachrichtigungen geschlummert bis zu diesem Zeitpunkt (nil = aktiv).
+    var snoozedUntil: Date? = nil
+
+    var isSnoozed: Bool {
+        guard let until = snoozedUntil else { return false }
+        return until > Date()
+    }
+
     var host: String? {
         URL(string: urlString)?.host
     }
@@ -166,6 +197,7 @@ struct Service: Identifiable, Codable, Hashable {
         notificationStyle = try c.decodeIfPresent(NotificationStyle.self, forKey: .notificationStyle) ?? .bannerAndSound
         notificationKeywords = try c.decodeIfPresent(String.self, forKey: .notificationKeywords) ?? ""
         locked        = try c.decodeIfPresent(Bool.self,         forKey: .locked) ?? false
+        snoozedUntil  = try c.decodeIfPresent(Date.self,         forKey: .snoozedUntil)
     }
 
     // Memberwise-Init bleibt erhalten (manuell, da init(from:) ihn sonst verdrängt).
@@ -250,11 +282,46 @@ struct AppSettings: Codable {
     /// – zur Fehlersuche bei Webdiensten.
     var webInspectorEnabled: Bool = false
 
-    /// Mikrofon-Kompatibilitätsmodus: deaktiviert Echo-/Rauschunterdrückung im
+    /// Mikrofon-Kompatibilitätsmodus: deaktiviert die Echounterdrückung im
     /// Browser, damit das eingebaute Mac-Mikrofon in WebRTC-Anrufen (BBB, Meet …)
-    /// funktioniert. Workaround für den macOS-Voice-Processing-Konflikt.
-    var micCompatMode: Bool = false
+    /// funktioniert (macOS-Voice-Processing-Konflikt). Standardmäßig AN, weil
+    /// das interne Mikro sonst stumm bleibt – der seltene Nachteil (mögliches
+    /// Echo bei Lautsprecher-Nutzung) ist das kleinere Übel. Abwahl bleibt
+    /// gespeichert.
+    var micCompatMode: Bool = true
 
     /// Lautstärke-Anhebung des Mikrofons im Kompatibilitätsmodus (1.0 = neutral).
-    var micGain: Double = 2.5
+    /// Standard 1.0: mehr Verstärkung ließ in BBB die Pegelanzeige dauerhaft
+    /// ausschlagen; bei Bedarf per Slider (Erweitert) anheben.
+    var micGain: Double = 1.0
+
+    /// Werbe-/Tracker-Blocker (WKContentRuleList) für alle Dienste.
+    var adBlockEnabled: Bool = false
+
+    /// Beim Start (max. 1x pro Tag) auf neue GitHub-Releases prüfen.
+    var updateCheckEnabled: Bool = true
+
+    // Robustes Decoding: Eine neue Eigenschaft ohne decodeIfPresent würde jede
+    // ältere store.json unlesbar machen (so entstand der Datenverlust v0.2.0).
+    // Beim Hinzufügen von Feldern hier IMMER eine Zeile ergänzen.
+    init() {}
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        tabBarPosition  = try c.decodeIfPresent(TabBarPosition.self, forKey: .tabBarPosition) ?? .left
+        appearance      = try c.decodeIfPresent(AppearanceMode.self, forKey: .appearance) ?? .system
+        startAtLogin    = try c.decodeIfPresent(Bool.self,   forKey: .startAtLogin) ?? false
+        keepRunningInBackground = try c.decodeIfPresent(Bool.self, forKey: .keepRunningInBackground) ?? true
+        dndEnabled      = try c.decodeIfPresent(Bool.self,   forKey: .dndEnabled) ?? false
+        lockEnabled     = try c.decodeIfPresent(Bool.self,   forKey: .lockEnabled) ?? false
+        requireBiometricForLogin = try c.decodeIfPresent(Bool.self, forKey: .requireBiometricForLogin) ?? true
+        globalHotkeyEnabled = try c.decodeIfPresent(Bool.self, forKey: .globalHotkeyEnabled) ?? true
+        sleepDelaySeconds = try c.decodeIfPresent(Double.self, forKey: .sleepDelaySeconds) ?? 300
+        customUserAgent = try c.decodeIfPresent(String.self, forKey: .customUserAgent) ?? ""
+        webInspectorEnabled = try c.decodeIfPresent(Bool.self, forKey: .webInspectorEnabled) ?? false
+        micCompatMode   = try c.decodeIfPresent(Bool.self,   forKey: .micCompatMode) ?? true
+        micGain         = try c.decodeIfPresent(Double.self, forKey: .micGain) ?? 1.0
+        adBlockEnabled  = try c.decodeIfPresent(Bool.self,   forKey: .adBlockEnabled) ?? false
+        updateCheckEnabled = try c.decodeIfPresent(Bool.self, forKey: .updateCheckEnabled) ?? true
+    }
 }

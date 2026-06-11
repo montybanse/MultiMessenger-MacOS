@@ -78,11 +78,14 @@ enum Bridge {
     })();
     """
 
-    /// Behebt zwei Probleme des eingebauten Mac-Mikrofons in WebRTC-Anrufen:
+    /// Behebt drei Probleme des eingebauten Mac-Mikrofons in WebRTC-Anrufen:
     ///  1) Stummbleiben durch den macOS-Voice-Processing-Konflikt
     ///     → echoCancellation aus (umgeht die problematische Audio-Unit).
-    ///  2) Zu leises Signal → eigene Pegel-Anhebung per WebAudio-GainNode
+    ///  2) Zu leises Signal → Kompressor + Pegel-Anhebung per WebAudio
     ///     (deterministisch, statt der unzuverlässigen Browser-AGC).
+    ///  3) Geräteerkennung (z.B. BBB-Echo-Test): die verarbeitete Spur hatte
+    ///     weder label noch deviceId → Seiten hielten sie für „kein Mikrofon".
+    ///     Jetzt wird die Identität des echten Mikros auf die Spur gespiegelt.
     static func micCompatScript(gain: Double) -> String {
         return """
         (function() {
@@ -95,11 +98,9 @@ enum Bridge {
                         if (constraints && constraints.audio) {
                             var a = (typeof constraints.audio === 'object') ? constraints.audio : {};
                             // Nur die Echounterdrückung abschalten – sie verursacht das
-                            // Stummbleiben des internen Mikros. Rauschunterdrückung und
-                            // automatische Pegelregelung BLEIBEN an (sorgen für Lautstärke).
+                            // Stummbleiben des internen Mikros.
                             a.echoCancellation = false;
                             if (a.noiseSuppression === undefined) a.noiseSuppression = true;
-                            if (a.autoGainControl === undefined) a.autoGainControl = true;
                             constraints.audio = a;
                         }
                     } catch (e) {}
@@ -107,6 +108,8 @@ enum Bridge {
                     return orig(constraints).then(function(stream) {
                         try {
                             if (!constraints || !constraints.audio || GAIN === 1) return stream;
+                            var raw = stream.getAudioTracks()[0];
+                            if (!raw) return stream;
                             var AC = window.AudioContext || window.webkitAudioContext;
                             if (!AC) return stream;
 
@@ -118,19 +121,51 @@ enum Bridge {
                             var ctx = window.__mmAudioCtx;
                             if (ctx.state === 'suspended') { try { ctx.resume(); } catch (e) {} }
 
-                            var src = ctx.createMediaStreamSource(stream);
+                            // Pegelkette: Quelle -> Kompressor (fängt Spitzen ab, hebt
+                            // leise Passagen an) -> Gain (Wunsch-Verstärkung) -> Ziel.
+                            var src = ctx.createMediaStreamSource(new MediaStream([raw]));
+                            var comp = ctx.createDynamicsCompressor();
+                            comp.threshold.value = -24;
+                            comp.knee.value = 30;
+                            comp.ratio.value = 6;
+                            comp.attack.value = 0.003;
+                            comp.release.value = 0.25;
                             var g = ctx.createGain();
                             g.gain.value = GAIN;
                             var dest = ctx.createMediaStreamDestination();
-                            src.connect(g); g.connect(dest);
+                            src.connect(comp); comp.connect(g); g.connect(dest);
 
                             var out = dest.stream.getAudioTracks()[0];
 
-                            // Aufräumen: wenn die verstärkte Spur endet (Anruf vorbei,
-                            // Mikrowechsel), die WebAudio-Knoten trennen -> kein Leak.
-                            out.addEventListener('ended', function() {
-                                try { src.disconnect(); g.disconnect(); } catch (e) {}
-                            });
+                            // Identität des echten Mikrofons spiegeln, damit die Seite
+                            // die Spur einem Gerät zuordnen kann (BBB prüft label/
+                            // deviceId und zeigte sonst „kein Mikrofon erkannt").
+                            try {
+                                Object.defineProperty(out, 'label', {
+                                    get: function() { return raw.label; }, configurable: true
+                                });
+                                out.getSettings = function() { return raw.getSettings(); };
+                                out.getCapabilities = raw.getCapabilities
+                                    ? function() { return raw.getCapabilities(); } : out.getCapabilities;
+                                out.getConstraints = function() { return raw.getConstraints(); };
+                                out.applyConstraints = function(c) { return raw.applyConstraints(c); };
+                            } catch (e) {}
+
+                            // Aufräumen in beide Richtungen: stoppt die Seite die Spur,
+                            // muss auch das echte Mikro freigegeben werden (oranger
+                            // Punkt aus) und die WebAudio-Knoten getrennt (kein Leak).
+                            var done = false;
+                            var cleanup = function() {
+                                if (done) return; done = true;
+                                try { src.disconnect(); } catch (e) {}
+                                try { comp.disconnect(); } catch (e) {}
+                                try { g.disconnect(); } catch (e) {}
+                                try { raw.stop(); } catch (e) {}
+                            };
+                            var origStop = out.stop.bind(out);
+                            out.stop = function() { cleanup(); origStop(); };
+                            out.addEventListener('ended', cleanup);
+                            raw.addEventListener('ended', cleanup);
 
                             stream.getAudioTracks().forEach(function(t) {
                                 stream.removeTrack(t);

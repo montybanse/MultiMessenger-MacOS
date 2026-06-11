@@ -135,6 +135,22 @@ struct TabStrip: View {
         Button(service.muted ? "Stummschaltung aufheben" : "Stummschalten") {
             var s = service; s.muted.toggle(); app.updateService(s)
         }
+        if service.isSnoozed, let until = service.snoozedUntil {
+            Button("Schlummern beenden (bis \(until.formatted(date: .omitted, time: .shortened)))") {
+                var s = service; s.snoozedUntil = nil; app.updateService(s)
+            }
+        } else {
+            Menu("Schlummern") {
+                Button("30 Minuten") { snooze(service, until: Date().addingTimeInterval(30 * 60)) }
+                Button("1 Stunde")   { snooze(service, until: Date().addingTimeInterval(60 * 60)) }
+                Button("Bis morgen 8 Uhr") {
+                    let next = Calendar.current.nextDate(after: Date(),
+                                                         matching: DateComponents(hour: 8, minute: 0),
+                                                         matchingPolicy: .nextTime) ?? Date().addingTimeInterval(12 * 3600)
+                    snooze(service, until: next)
+                }
+            }
+        }
         Divider()
         Button("Bearbeiten …") { activeSheet = .edit(service) }
         Divider()
@@ -142,6 +158,12 @@ struct TabStrip: View {
             NotificationCenter.default.post(name: .discardService, object: service.id)
             app.removeService(service.id)
         }
+    }
+
+    private func snooze(_ service: Service, until: Date) {
+        var s = service
+        s.snoozedUntil = until
+        app.updateService(s)
     }
 
     // MARK: Steuerung (Hinzufügen / Einstellungen)
@@ -197,7 +219,8 @@ private struct TabItem: View {
 
     var body: some View {
         ServiceIconView(service: service, size: 34, unread: unread,
-                        muted: service.muted, sleeping: sleeping, locked: service.locked)
+                        muted: service.muted || service.isSnoozed,
+                        sleeping: sleeping, locked: service.locked)
             .padding(5)
             .background {
                 RoundedRectangle(cornerRadius: 12, style: .continuous)

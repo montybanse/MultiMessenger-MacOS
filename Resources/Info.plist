@@ -6,23 +6,27 @@
 	<string>MultiMessenger</string>
 	<key>CFBundleExecutable</key>
 	<string>MultiMessenger</string>
+	<!-- Kein CFBundleIconName setzen: ohne Assets.car im Bundle läuft die
+	     Icon-Suche der Mitteilungszentrale damit ins Leere (leeres Icon in
+	     Benachrichtigungen). Nur CFBundleIconFile -> Fallback auf AppIcon.icns. -->
 	<key>CFBundleIconFile</key>
 	<string>AppIcon</string>
-	<key>CFBundleIconName</key>
-	<string>AppIcon</string>
+	<!-- Bundle-ID-Wechsel mit v0.3.0 (vormals eu.montybanse.MultiMessenger):
+	     Die alte ID war in den Benachrichtigungs-Caches von macOS dauerhaft als
+	     „App ohne Icon" eingebrannt. Datenmigration: AppDelegate.migrateLegacyWebKitData(). -->
 	<key>CFBundleIdentifier</key>
-	<string>eu.montybanse.MultiMessenger</string>
+	<string>eu.montybanse.MultiMessengerApp</string>
 	<key>CFBundleName</key>
 	<string>MultiMessenger</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>0.2.4</string>
+	<string>0.3.0</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
 			<key>CFBundleURLName</key>
-			<string>eu.montybanse.MultiMessenger.url</string>
+			<string>eu.montybanse.MultiMessengerApp.url</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>mmsg</string>
@@ -30,7 +34,7 @@
 		</dict>
 	</array>
 	<key>CFBundleVersion</key>
-	<string>6</string>
+	<string>7</string>
 	<key>LSApplicationCategoryType</key>
 	<string>public.app-category.social-networking</string>
 	<key>LSMinimumSystemVersion</key>

@@ -6,6 +6,9 @@ struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var importMessage: String?
+    @StateObject private var micMeter = MicLevelMeter()
+    @StateObject private var webMic = WebMicTester()
+    @ObservedObject private var updater = UpdateChecker.shared
 
     var body: some View {
         VStack(spacing: 0) {
@@ -26,6 +29,8 @@ struct SettingsView: View {
         }
         .frame(width: 540, height: 480)
         .onDisappear {
+            micMeter.stop()
+            webMic.stop()
             // Geänderte Einstellungen sofort auf die Dienste anwenden.
             NotificationCenter.default.post(name: .settingsChanged, object: nil)
         }
@@ -53,6 +58,8 @@ struct SettingsView: View {
                 ))
                 Toggle("Im Hintergrund weiterlaufen (Fenster schließen beendet nicht)",
                        isOn: settingBinding(\.keepRunningInBackground))
+                Toggle("Beim Start auf Updates prüfen (GitHub)",
+                       isOn: settingBinding(\.updateCheckEnabled))
             }
         }
         .formStyle(.grouped)
@@ -66,6 +73,16 @@ struct SettingsView: View {
                 Toggle("Nicht stören (alle Benachrichtigungen aus)", isOn: settingBinding(\.dndEnabled))
             } footer: {
                 Text("Einzelne Dienste lassen sich über das Kontextmenü stummschalten.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            Section {
+                Button {
+                    NotificationManager.shared.postTest()
+                } label: {
+                    Label("Testbenachrichtigung senden", systemImage: "bell.badge")
+                }
+            } footer: {
+                Text("Zeigt sofort eine Beispiel-Mitteilung – praktisch, um Berechtigung und Darstellung zu prüfen.")
                     .font(.caption).foregroundStyle(.secondary)
             }
             Section("Hinweis") {
@@ -82,24 +99,32 @@ struct SettingsView: View {
 
     private var workspacesTab: some View {
         Form {
-            Section("Vorhandene Workspaces") {
+            Section {
                 if app.workspaces.isEmpty {
                     Text("Noch keine Workspaces angelegt.").foregroundStyle(.secondary)
                 } else {
                     ForEach(app.workspaces) { ws in
-                        HStack {
-                            Image(systemName: ws.symbol)
-                                .foregroundStyle(AccentPalette.color(for: ws.accentKey) ?? .secondary)
-                            Text(ws.name)
-                            Spacer()
-                            accentMenu(for: ws)
-                            Button(role: .destructive) { app.removeWorkspace(ws.id) } label: {
-                                Image(systemName: "trash")
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack {
+                                Image(systemName: ws.symbol)
+                                    .foregroundStyle(AccentPalette.color(for: ws.accentKey) ?? .secondary)
+                                Text(ws.name)
+                                Spacer()
+                                accentMenu(for: ws)
+                                Button(role: .destructive) { app.removeWorkspace(ws.id) } label: {
+                                    Image(systemName: "trash")
+                                }
+                                .buttonStyle(.borderless)
                             }
-                            .buttonStyle(.borderless)
+                            quietHoursRow(for: ws)
                         }
                     }
                 }
+            } header: {
+                Text("Vorhandene Workspaces")
+            } footer: {
+                Text("Ruhezeiten unterdrücken Benachrichtigungen aller Dienste des Workspace im gewählten Zeitfenster – z.B. berufliche Dienste abends, private tagsüber.")
+                    .font(.caption).foregroundStyle(.secondary)
             }
             Section {
                 HStack {
@@ -155,6 +180,49 @@ struct SettingsView: View {
         app.workspaces[idx].accentKey = key
     }
 
+    /// Ruhezeiten-Zeile unter jedem Workspace (Toggle + von/bis-Uhrzeit).
+    private func quietHoursRow(for ws: Workspace) -> some View {
+        HStack(spacing: 8) {
+            Toggle("Ruhezeiten", isOn: Binding(
+                get: { ws.quietHoursEnabled },
+                set: { var w = ws; w.quietHoursEnabled = $0; app.updateWorkspace(w) }
+            ))
+            .toggleStyle(.checkbox)
+            if ws.quietHoursEnabled {
+                DatePicker("von", selection: quietBinding(ws, \.quietStartMinutes),
+                           displayedComponents: .hourAndMinute)
+                    .labelsHidden().fixedSize()
+                Text("–").foregroundStyle(.secondary)
+                DatePicker("bis", selection: quietBinding(ws, \.quietEndMinutes),
+                           displayedComponents: .hourAndMinute)
+                    .labelsHidden().fixedSize()
+                if ws.quietStartMinutes > ws.quietEndMinutes {
+                    Text("(über Nacht)").font(.caption).foregroundStyle(.secondary)
+                }
+            }
+            Spacer()
+        }
+        .font(.callout)
+        .padding(.leading, 24)
+    }
+
+    /// Wandelt Minuten-seit-Mitternacht in ein Date für den DatePicker um (und zurück).
+    private func quietBinding(_ ws: Workspace, _ keyPath: WritableKeyPath<Workspace, Int>) -> Binding<Date> {
+        Binding(
+            get: {
+                let minutes = ws[keyPath: keyPath]
+                return Calendar.current.date(bySettingHour: minutes / 60, minute: minutes % 60,
+                                             second: 0, of: Date()) ?? Date()
+            },
+            set: { date in
+                let comps = Calendar.current.dateComponents([.hour, .minute], from: date)
+                var w = ws
+                w[keyPath: keyPath] = (comps.hour ?? 0) * 60 + (comps.minute ?? 0)
+                app.updateWorkspace(w)
+            }
+        )
+    }
+
     // MARK: Erweitert
 
     private var advancedTab: some View {
@@ -187,7 +255,76 @@ struct SettingsView: View {
                     }
                 }
             } footer: {
-                Text("Aktivieren, falls das eingebaute Mac-Mikrofon in Videoanrufen (BigBlueButton, Meet …) stumm oder zu leise ist. Der Regler hebt den Pegel an. Nach Änderungen den Dienst neu laden (⌘R).")
+                Text("Sorgt dafür, dass das eingebaute Mac-Mikrofon in Videoanrufen (BigBlueButton, Meet …) funktioniert; der Regler hebt den Pegel an. Nur abschalten, falls Gesprächspartner bei Lautsprecher-Nutzung ein Echo hören (oder Kopfhörer verwenden). Nach Änderungen den Dienst neu laden (⌘R).")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            Section {
+                // Test 1: direkt am System (ohne WebKit).
+                HStack {
+                    Button {
+                        micMeter.running ? micMeter.stop() : micMeter.start()
+                    } label: {
+                        Label(micMeter.running ? "System-Test beenden" : "System-Test starten",
+                              systemImage: micMeter.running ? "stop.circle" : "mic.badge.plus")
+                    }
+                    if micMeter.running {
+                        Text(micMeter.deviceName).font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+                if micMeter.running {
+                    VStack(alignment: .leading, spacing: 4) {
+                        ProgressView(value: micMeter.level)
+                            .tint(micMeter.level > 0.25 ? .green : .orange)
+                        Text(micMeter.peak > 0.3
+                             ? "Signal kommt an – Spitze \(Int(micMeter.peak * 100)) %. Das Mikrofon funktioniert auf Systemebene."
+                             : "Sprich jetzt: Schlägt der Balken kaum aus, liefert schon macOS zu wenig Pegel → Systemeinstellungen → Ton → Eingabe prüfen (Eingangslautstärke!).")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+                if !micMeter.errorText.isEmpty {
+                    Text(micMeter.errorText).font(.caption).foregroundStyle(.red)
+                }
+
+                // Test 2: durch die Web-Ansicht (genau die Kette, die BBB & Co. nutzen).
+                HStack {
+                    Button {
+                        webMic.running
+                            ? webMic.stop()
+                            : webMic.start(micCompatMode: app.settings.micCompatMode,
+                                           micGain: app.settings.micGain)
+                    } label: {
+                        Label(webMic.running ? "Web-Test beenden" : "Web-Test starten",
+                              systemImage: webMic.running ? "stop.circle" : "network.badge.shield.half.filled")
+                    }
+                    if webMic.running && !webMic.trackLabel.isEmpty {
+                        Text(webMic.trackLabel).font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+                if webMic.running {
+                    VStack(alignment: .leading, spacing: 4) {
+                        ProgressView(value: webMic.level)
+                            .tint(webMic.level > 0.25 ? .green : .orange)
+                        Text(webMic.peak > 0.3
+                             ? "Web-Ansicht erhält Signal – Spitze \(Int(webMic.peak * 100)) %. So sollte es auch in BBB funktionieren."
+                             : "Sprich jetzt: Bleibt der Balken still, obwohl der System-Test ausschlägt, blockiert WebKit das Mikro → Kompatibilitätsmodus oben an/aus testen und Web-Test neu starten.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+                if !webMic.errorText.isEmpty {
+                    Text("Web-Test: \(webMic.errorText)").font(.caption).foregroundStyle(.red)
+                }
+            } header: {
+                Text("Mikrofon-Test")
+            } footer: {
+                Text("System-Test misst direkt am Mac, Web-Test durch die Browser-Technik (wie in BBB, inkl. Kompatibilitätsmodus). Schlägt nur der System-Test aus, liegt es an WebKit – dann den Kompatibilitätsmodus aktivieren und den Web-Test wiederholen.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            Section {
+                Toggle("Werbung & Tracker blockieren", isOn: settingBinding(\.adBlockEnabled))
+            } header: {
+                Text("Datenschutz")
+            } footer: {
+                Text("Blockiert bekannte Werbe- und Tracking-Netzwerke nativ über WebKit-Inhaltsregeln (kostet praktisch keine Leistung, spart Daten). Bewusst konservative Liste, damit Login- und Chatfunktionen nicht brechen. Greift nach dem Schließen der Einstellungen.")
                     .font(.caption).foregroundStyle(.secondary)
             }
             Section("Netzwerk") {
@@ -271,7 +408,7 @@ struct SettingsView: View {
     private static let repoURL = "https://github.com/montybanse/MultiMessenger-MacOS"
 
     private var appVersion: String {
-        let v = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.2.4"
+        let v = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.3.0"
         let b = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
         return "Version \(v) (Build \(b))"
     }
@@ -294,6 +431,19 @@ struct SettingsView: View {
             }
 
             Section("Projekt") {
+                HStack {
+                    Button {
+                        updater.checkManually()
+                    } label: {
+                        Label("Jetzt auf Updates prüfen", systemImage: "arrow.triangle.2.circlepath")
+                    }
+                    .disabled(updater.checking)
+                    if updater.checking {
+                        ProgressView().controlSize(.small)
+                    } else if !updater.statusText.isEmpty {
+                        Text(updater.statusText).font(.caption).foregroundStyle(.secondary)
+                    }
+                }
                 Link(destination: URL(string: Self.repoURL)!) {
                     Label("Auf GitHub ansehen", systemImage: "chevron.left.forwardslash.chevron.right")
                 }

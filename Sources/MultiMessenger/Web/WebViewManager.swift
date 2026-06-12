@@ -9,6 +9,13 @@ final class WebViewManager: ObservableObject {
     private var pool: [UUID: ServiceWebView] = [:]
     private var sleepTimers: [UUID: Timer] = [:]
 
+    /// Zuletzt vom Dienst gemeldete Ungelesen-Zahl – auch für den gerade
+    /// aktiven Dienst. Das JS meldet nur Änderungen, und Meldungen für den
+    /// aktiven Dienst werden verworfen (aktiv = gelesen). Ohne diesen Cache
+    /// ginge ein währenddessen gemeldeter Zählerstand beim Wegwechseln
+    /// verloren und das Badge bliebe leer (Lost Update).
+    private var lastBadge: [UUID: Int] = [:]
+
     /// IDs der aktuell geladenen (wachen) Dienste. Wird gespiegelt aus `pool`,
     /// damit die Oberfläche das Pause-Symbol anzeigen kann. Aktualisierung erfolgt
     /// asynchron, um keine Mutation während eines View-Updates auszulösen.
@@ -35,6 +42,7 @@ final class WebViewManager: ObservableObject {
             self?.handleNotify(serviceID: id, title: title, body: body, iconURL: iconURL)
         }
         swv.onBadge = { [weak self] id, count in
+            self?.lastBadge[id] = count
             self?.appState.setUnread(count, for: id)
         }
         pool[service.id] = swv
@@ -46,6 +54,12 @@ final class WebViewManager: ObservableObject {
     func didSelect(_ selectedID: UUID?, allServices: [Service]) {
         for service in allServices {
             if service.id == selectedID { continue }
+            // Beim Verlassen den zuletzt gemeldeten Zählerstand wieder
+            // anwenden (wurde er während der aktiven Ansicht gemeldet,
+            // hatte setUnread ihn verworfen).
+            if let cached = lastBadge[service.id] {
+                appState.setUnread(cached, for: service.id)
+            }
             guard pool[service.id] != nil else { continue }
             switch service.sleepPolicy {
             case .alwaysAwake:

@@ -200,10 +200,26 @@ extension ServiceWebView: WKNavigationDelegate {
 
     func webView(_ webView: WKWebView, navigationAction: WKNavigationAction, didBecome download: WKDownload) {
         download.delegate = self
+        restoreFocusAfterDownload()
     }
 
     func webView(_ webView: WKWebView, navigationResponse: WKNavigationResponse, didBecome download: WKDownload) {
         download.delegate = self
+        restoreFocusAfterDownload()
+    }
+
+    /// Beim Start eines Downloads gibt WKWebView den First-Responder-Status im
+    /// Fenster ab und holt ihn nicht von selbst zurück. Folge: In Mattermost
+    /// lassen sich danach Emoji-Auswahl und Thread-Antwort (rechte Sidebar)
+    /// nicht mehr öffnen – beides sind Popover mit Fokus-Lock, die ohne
+    /// First Responder nicht greifen. Erst ein Neustart (neue WebView) half.
+    /// Wir stellen den Fokus nach dem Download-Start aktiv wieder her.
+    private func restoreFocusAfterDownload() {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
+            guard let self, let window = self.webView.window else { return }
+            window.makeFirstResponder(self.webView)
+            self.webView.evaluateJavaScript("try { window.focus(); } catch (e) {}")
+        }
     }
 }
 
